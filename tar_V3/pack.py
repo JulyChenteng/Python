@@ -3,6 +3,7 @@ import os
 import tarfile
 import time
 import datetime
+import threading
 
 CONFIG_FILE = "pack.cfg"
 
@@ -30,7 +31,7 @@ def get_package_name(packagePath, recordType, nCount, tmBegin ):
     return packageName
 
 def run(conf, recordType):
-    print("Process ", recordType, "record begin...")
+    print("Process ", recordType, "record thread begin...")
 
     recordPath = conf.get(recordType, "RECORD_PATH")
     packagePath = conf.get(recordType, "PACKAGE_PATH")
@@ -62,23 +63,17 @@ def run(conf, recordType):
                     nCount %= maxSerialNo + 1
 
                 tmTmp = datetime.datetime.now() 
-                
                 nTarFileSize += os.path.getsize(fileName)
-                print(nTarFileSize)
-                print(fileName)
             
-                if nCount == 0:
-                    time.sleep(4)
                 if nTarFileSize > maxTarFileSize or (tmTmp-tmBegin).seconds >= timeWait:
                     tar.close()
+                    
                     nCount += 1
                     nTarFileSize = os.path.getsize(fileName)
 
                     if timeWait - (tmTmp-tmBegin).seconds > 0:
-                        print(timeWait - (tmTmp-tmBegin).seconds)
                         time.sleep(timeWait - (tmTmp-tmBegin).seconds)
                     
-                    print(nCount)
                     tmBegin = datetime.datetime.now()
                     packageName = get_package_name(packagePath, recordType, nCount, tmBegin)
                     tar = tarfile.open(packageName, 'w:gz') 
@@ -88,7 +83,7 @@ def run(conf, recordType):
             tar.close()
         os.chdir(currPath)
 
-    print("Process ", recordType, "record end...\n")        
+    print("Process ", recordType, "record thread end...\n")        
 
 def main():
     conf = init_config(CONFIG_FILE)
@@ -96,9 +91,18 @@ def main():
         print("The config file is not exist!")
         return
 
-    run(conf, "GPRS")
-    run(conf, "GSM")
-    run(conf, "SMS")
+    recordTypes = ["GPRS", "GSM", "SMS"]
+    threads = []
+
+    for type in recordTypes:
+        thread = threading.Thread(target=run, args=(conf, type,))
+        threads.append(thread)
+
+    for thread in threads:
+        thread.start()
+
+    for thread in threads:
+        thread.join()
 
 if __name__ == "__main__":
     main()
