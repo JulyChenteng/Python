@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import configparser
 import os
 import tarfile
@@ -77,6 +78,7 @@ def run(conf, recordType):
         tar = tarfile.open(packageName, 'w:gz')
 
         # 遍历文件列表
+        os.chdir(recordPath)
         for fileName in fileList:
             if os.path.isfile(fileName):
                 if nCount > maxSerialNo:
