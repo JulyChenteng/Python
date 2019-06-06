@@ -9,7 +9,7 @@ import re
 CONFIG_FILE = "pack.cfg"
 
 '''
-    ³õÊ¼»¯ÅäÖÃ
+    åˆå§‹åŒ–é…ç½®
 '''
 def init_config(fileName):
     if os.path.exists( os.path.join(os.getcwd(),fileName) ):
@@ -20,7 +20,7 @@ def init_config(fileName):
     return -1
 
 '''
-    ¶ÁÈ¡¹«¹²ÅäÖÃÏî
+    è¯»å–å…¬å…±é…ç½®é¡¹
 '''
 def read_common_options(conf):
     maxSerial = conf.get("COMMON", "MAX_SERIAL_NO")
@@ -35,9 +35,9 @@ def read_common_options(conf):
     return maxSerialNo, maxTarFileSize, timeWait
 
 '''
-Æ´½ÓÑ¹Ëõ°üÎÄ¼þÃû
-ÃüÃû¹æ·¶£º
-    Ïêµ¥ÖÖÀà(gprs;sms;gsm)_´ò°üÐòºÅ(0001~9999)_´ò°ü¿ªÊ¼Ê±¼ä(YYYYMMDDHHmm).tar
+æ‹¼æŽ¥åŽ‹ç¼©åŒ…æ–‡ä»¶å
+å‘½åè§„èŒƒï¼š
+    è¯¦å•ç§ç±»(gprs;sms;gsm)_æ‰“åŒ…åºå·(0001~9999)_æ‰“åŒ…å¼€å§‹æ—¶é—´(YYYYMMDDHHmm).tar
 '''
 def get_package_name(packagePath, recordType, nCount, tmBegin ):
     pattern =  '{0:04d}'
@@ -50,7 +50,7 @@ def get_package_name(packagePath, recordType, nCount, tmBegin ):
 def run(conf, recordType):
     print("Process ", recordType, "record begin...")
 
-    # »ñÈ¡Ïêµ¥Â·¾¶ÒÔ¼°Ñ¹Ëõ°ü±£´æÂ·¾¶
+    # èŽ·å–è¯¦å•è·¯å¾„ä»¥åŠåŽ‹ç¼©åŒ…ä¿å­˜è·¯å¾„
     recordPath = conf.get(recordType, "RECORD_PATH")
     packagePath = conf.get(recordType, "PACKAGE_PATH")
 
@@ -71,13 +71,13 @@ def run(conf, recordType):
     nCount = 0
     nTarFileSize = 0
 
-    # ±éÀúÄ¿Â¼»ñÈ¡ÎÄ¼þÁÐ±í
+    # éåŽ†ç›®å½•èŽ·å–æ–‡ä»¶åˆ—è¡¨
     for _, _, fileList in os.walk(recordPath):
         tmBegin = datetime.datetime.now()
         packageName = get_package_name(packagePath, recordType, nCount, tmBegin)
         tar = tarfile.open(packageName, 'w:gz')
 
-        # ±éÀúÎÄ¼þÁÐ±í
+        # éåŽ†æ–‡ä»¶åˆ—è¡¨
         os.chdir(recordPath)
         for fileName in fileList:
             if os.path.isfile(fileName):
@@ -88,13 +88,13 @@ def run(conf, recordType):
                 
                 nTarFileSize += os.path.getsize(fileName)
 
-                # Ñ¹Ëõ°üÔ´ÎÄ¼þ×ÜÁ¿´óÓÚ×î´óÖµ»òÕß´ò°üÖÜÆÚÒÑµ½
+                # åŽ‹ç¼©åŒ…æºæ–‡ä»¶æ€»é‡å¤§äºŽæœ€å¤§å€¼æˆ–è€…æ‰“åŒ…å‘¨æœŸå·²åˆ°
                 if nTarFileSize > maxTarFileSize or (tmTmp-tmBegin).seconds >= timeWait:
                     tar.close()
                     nCount += 1
                     nTarFileSize = os.path.getsize(fileName)
 
-                    # Ñ¹Ëõ°üÔ´ÎÄ¼þ×ÜÁ¿´óÓÚ×î´óÖµµ«ÊÇ´ò°üÖÜÆÚÎ´½áÊø£¬ÔòµÈ´ý
+                    # åŽ‹ç¼©åŒ…æºæ–‡ä»¶æ€»é‡å¤§äºŽæœ€å¤§å€¼ä½†æ˜¯æ‰“åŒ…å‘¨æœŸæœªç»“æŸï¼Œåˆ™ç­‰å¾…
                     if timeWait - (tmTmp-tmBegin).seconds > 0:
                         print(timeWait - (tmTmp-tmBegin).seconds)
                         time.sleep(timeWait - (tmTmp-tmBegin).seconds)

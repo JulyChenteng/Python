@@ -82,6 +82,9 @@ def run(conf, recordType):
         isDirEmpty = True
         # 遍历目录获取文件列表
         fileList = os.listdir(recordPath)
+        startTime = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+        lastStartTime = conf.get(recordType, "LAST_START_TIME")
+        tmLastStart = datetime.datetime.strptime(lastStartTime, "%Y%m%d%H%M%S")
 
         if fileList:
             tmBegin = datetime.datetime.now()
@@ -92,41 +95,46 @@ def run(conf, recordType):
                 fileName = os.path.join(recordPath, file)
 
                 if os.path.isfile(fileName):
-                    if nCount > maxSerialNo:
-                        nCount %= maxSerialNo + 1
+                    if (os.path.getmtime(fileName) -  tmLastStart).seconds > 0:
+                        if nCount > maxSerialNo:
+                            nCount %= maxSerialNo + 1
 
-                    # 单个文件大于MAX_TARFILE_SIZE，过滤掉，不参与压缩
-                    if os.path.getsize(fileName) > maxTarFileSize:
-                        continue
+                        # 单个文件大于MAX_TARFILE_SIZE，过滤掉，不参与压缩
+                        if os.path.getsize(fileName) > maxTarFileSize:
+                            continue
 
-                    # 放在单个大于MAX_TARFILE_SIZE情况之后，可以解决以下情况：
-                    # 当目录下所有文件都大于MAX_TARFILE_SIZE时，出空包的情况
-                    isDirEmpty = False    
+                        # 放在单个大于MAX_TARFILE_SIZE情况之后，可以解决以下情况：
+                        # 当目录下所有文件都大于MAX_TARFILE_SIZE时，出空包的情况
+                        isDirEmpty = False    
+                        
+                        tmTmp = datetime.datetime.now() 
+                        nTarFileSize += os.path.getsize(fileName)
                     
-                    tmTmp = datetime.datetime.now() 
-                    nTarFileSize += os.path.getsize(fileName)
-                
-                   # 压缩包源文件总量大于最大值或者打包周期已到
-                    if nTarFileSize > maxTarFileSize or (tmTmp-tmBegin).seconds >= timeWait:
-                        tar.close()
-                        
-                        nCount += 1
-                        nTarFileSize = os.path.getsize(fileName)
-                        # 压缩包源文件总量大于最大值但是打包周期未结束，则等待
-                        if timeWait - (tmTmp-tmBegin).seconds > 0:
-                            time.sleep(timeWait - (tmTmp-tmBegin).seconds)
-                        
-                        tmBegin = datetime.datetime.now()
-                        packageName = get_package_name(packagePath, recordType, nCount, tmBegin)
-                        tar = tarfile.open(packageName, 'w:gz') 
-                    tar.add(fileName, arcname=file)
-                    os.remove(fileName)
+                    # 压缩包源文件总量大于最大值或者打包周期已到
+                        if nTarFileSize > maxTarFileSize or (tmTmp-tmBegin).seconds >= timeWait:
+                            tar.close()
+                            
+                            nCount += 1
+                            nTarFileSize = os.path.getsize(fileName)
+                            # 压缩包源文件总量大于最大值但是打包周期未结束，则等待
+                            if timeWait > (tmTmp-tmBegin).seconds:
+                                time.sleep(timeWait - (tmTmp-tmBegin).seconds)
+                            
+                            tmBegin = datetime.datetime.now()
+                            packageName = get_package_name(packagePath, recordType, nCount, tmBegin)
+                            tar = tarfile.open(packageName, 'w:gz') 
+                        tar.add(fileName, arcname=file)
+                        os.remove(fileName)
                     
             if not tar.closed:
                 tar.close()
             # 目录中没有文件的情况
             if isDirEmpty:     
                 os.remove(packageName)
+
+    conf.set(recordType, "LAST_START_TIME", startTime)
+    with open(CONFIG_FILE, "w+") as f:
+        conf.write(f)
 
     print("Process ", recordType, "record thread end...\n")        
 
