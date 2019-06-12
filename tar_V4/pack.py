@@ -119,7 +119,7 @@ def run(conf, recordType):
                         tmBegin = datetime.datetime.now()
                         packageName = get_package_name(packagePath, recordType, nCount, tmBegin)
                         tar = tarfile.open(packageName, 'w:gz') 
-                    print('Packing, original file=', fileName, ', tar file=', packageName);
+                    print('Packing, original file=', fileName, ', tar file=', packageName)
                     tar.add(fileName, arcname=file)
                     os.remove(fileName)
                     
