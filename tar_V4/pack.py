@@ -70,6 +70,7 @@ def run(conf, recordType):
     currPath = os.getcwd()
 
     nCount = 0
+    nFileCount = 0
     nTarFileSize = 0
     for recordPath in recordPathList:
         if not os.path.exists(recordPath):
@@ -108,10 +109,19 @@ def run(conf, recordType):
                 
                    # 压缩包源文件总量大于最大值或者打包周期已到
                     if nTarFileSize > maxTarFileSize or (tmTmp-tmBegin).seconds >= timeWait:
+                        nRealCount = len(tar.getnames())
+                        if nFileCount != nRealCount:
+                            print("Error: file name is ",  packageName, ". Total number of original files=", 
+                            nFileCount, ".\nThe total number of files in the tar file=", nRealCount) 
+                        else:
+                            print("file name is ",  packageName, " .Total number of original files=", 
+                            nFileCount, ".\nThe total number of files in the tar file=", nRealCount)
+
                         tar.close()
-                        
                         nCount += 1
+                        nFileCount = 0
                         nTarFileSize = os.path.getsize(fileName)
+                        
                         # 压缩包源文件总量大于最大值但是打包周期未结束，则等待
                         if timeWait - (tmTmp-tmBegin).seconds > 0:
                             time.sleep(timeWait - (tmTmp-tmBegin).seconds)
@@ -120,6 +130,7 @@ def run(conf, recordType):
                         packageName = get_package_name(packagePath, recordType, nCount, tmBegin)
                         tar = tarfile.open(packageName, 'w:gz') 
                     print('Packing, original file=', fileName, ', tar file=', packageName)
+                    nFileCount += 1
                     tar.add(fileName, arcname=file)
                     os.remove(fileName)
                     
