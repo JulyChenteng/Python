@@ -6,6 +6,7 @@ import time
 import datetime
 import threading
 import re
+import shutil
 
 CONFIG_FILE = "pack.cfg"
 
@@ -43,23 +44,28 @@ def read_common_options(conf):
 def get_package_name(packagePath, recordType, nCount, tmBegin ):
     pattern =  '{0:04d}'
     serialNo = pattern.format(nCount)
-    strTmBegin = tmBegin.strftime("%Y%m%d%H%M")    
+    strTmBegin = tmBegin.strftime("%Y%m%d%H%M%S")    
     packageName = packagePath + "/" + recordType + "_" + serialNo + "_" + strTmBegin + ".tar"
     
     return packageName
 
 def run(conf, recordType):
-    print("Process ", recordType, "record thread begin...")
+    print("Process " + recordType, "record thread begin...")
 
     # 获取详单路径以及压缩包保存路径
     recordPaths = conf.get(recordType, "RECORD_PATH")
     packagePath = conf.get(recordType, "PACKAGE_PATH")
 
-    print("RECORD_PATH: ", recordPaths)
-    print("PACKAGE_PATH: ", packagePath)
+    print("RECORD_PATH: " + recordPaths)
+    print("PACKAGE_PATH: " + packagePath)
 
     if not os.path.exists(packagePath):
-        print("The package path is not exist!\n")
+        print("The package path is not exist!")
+        return
+
+    packageTmpPath = os.path.join(packagePath, 'tmp_dir')
+    if not os.path.exists(packageTmpPath):
+        print("The path '" + packageTmpPath + "' is not exist!")
         return
 
     # 支持详单输入路径存在多个目录的情况
@@ -72,23 +78,24 @@ def run(conf, recordType):
     nCount = 0
     nFileCount = 0
     nTarFileSize = 0
+    isDirEmpty = True
+
+    tmBegin = datetime.datetime.now()
+    packageName = get_package_name(packageTmpPath, recordType, nCount, tmBegin)
+    tar = tarfile.open(packageName, 'w:gz')
     for recordPath in recordPathList:
         if not os.path.exists(recordPath):
             print("The record path is not exist!\n")
             return
 
         recordPath = os.path.join(currPath, recordPath)
+        packageTmpPath = os.path.join(currPath, packageTmpPath)
         packagePath = os.path.join(currPath, packagePath)
         
-        isDirEmpty = True
         # 遍历目录获取文件列表
         fileList = os.listdir(recordPath)
 
         if fileList:
-            tmBegin = datetime.datetime.now()
-            packageName = get_package_name(packagePath, recordType, nCount, tmBegin)
-            tar = tarfile.open(packageName, 'w:gz')
-
             for file in fileList:
                 fileName = os.path.join(recordPath, file)
 
@@ -111,13 +118,15 @@ def run(conf, recordType):
                     if nTarFileSize > maxTarFileSize or (tmTmp-tmBegin).seconds >= timeWait:
                         nRealCount = len(tar.getnames())
                         if nFileCount != nRealCount:
-                            print("Error: file name is ",  packageName, ". Total number of original files=", 
-                            nFileCount, ".\nThe total number of files in the tar file=", nRealCount) 
+                            print("Error: file name is " + packageName, ", Total number of original files =", 
+                            nFileCount, ", The total number of files in the tar file =", nRealCount, ", Files: ",  tar.getnames()) 
                         else:
-                            print("file name is ",  packageName, " .Total number of original files=", 
-                            nFileCount, ".\nThe total number of files in the tar file=", nRealCount)
+                            print("Success: file name is ",  packageName, ", Total number of original files =",
+                            nFileCount, "The total number of files in the tar file =", nRealCount, ", Files: ",  tar.getnames())
 
                         tar.close()
+                        shutil.move(packageName, packagePath)
+
                         nCount += 1
                         nFileCount = 0
                         nTarFileSize = os.path.getsize(fileName)
@@ -127,20 +136,31 @@ def run(conf, recordType):
                             time.sleep(timeWait - (tmTmp-tmBegin).seconds)
                         
                         tmBegin = datetime.datetime.now()
-                        packageName = get_package_name(packagePath, recordType, nCount, tmBegin)
+                        packageName = get_package_name(packageTmpPath, recordType, nCount, tmBegin)
                         tar = tarfile.open(packageName, 'w:gz') 
-                    print('Packing, original file=', fileName, ', tar file=', packageName)
+
+                    print('Packing, original file=' + fileName, ', tar file=' + packageName)
                     nFileCount += 1
                     tar.add(fileName, arcname=file)
                     os.remove(fileName)
+                    print("Remove " + fileName + " from " +  recordPath + "....")
                     
-            if not tar.closed:
-                tar.close()
-            # 目录中没有文件的情况
-            if isDirEmpty:     
-                os.remove(packageName)
+    if not tar.closed:
+        nRealCount = len(tar.getnames())
+        if nFileCount != nRealCount:
+            print("Error: file name is " + packageName, ", Total number of original files =", 
+            nFileCount, ", The total number of files in the tar file =", nRealCount, ", Files: ",  tar.getnames()) 
+        else:
+            print("Success: file name is ",  packageName, ", Total number of original files =",
+            nFileCount, "The total number of files in the tar file =", nRealCount, ", Files: ",  tar.getnames())
+        tar.close()
+    # 目录中没有文件的情况
+    if isDirEmpty:    
+        os.remove(packageName)
+    else:
+        shutil.move(packageName, packagePath) 
 
-    print("Process ", recordType, "record thread end...\n")        
+    print("Process " + recordType, " record thread end...\n")        
 
 def main():
     conf = init_config(CONFIG_FILE)
