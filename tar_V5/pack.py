@@ -6,6 +6,7 @@ import time
 import datetime
 import threading
 import re
+import shutil
 
 CONFIG_FILE = "pack.cfg"
 
@@ -36,6 +37,20 @@ def read_common_options(conf):
     return maxSerialNo, maxTarFileSize, timeWait
 
 '''
+    统计压缩包信息，获取压缩包里的文件个数、文件总大小和文件名列表
+'''
+def stat(packageName):
+    nCount = 0
+    nTotalSize = 0
+    tf = tarfile.open(packageName, "r:gz")
+    
+    for ti in tf:
+        if ti.isfile():
+            nTotalSize += ti.size
+    
+    return len(tf.getnames()), nTotalSize, tf.getnames()
+
+'''
 拼接压缩包文件名
 命名规范：
     详单种类(gprs;sms;gsm)_打包序号(0001~9999)_打包开始时间(YYYYMMDDHHmm).tar
@@ -43,24 +58,40 @@ def read_common_options(conf):
 def get_package_name(packagePath, recordType, nCount, tmBegin ):
     pattern =  '{0:04d}'
     serialNo = pattern.format(nCount)
-    strTmBegin = tmBegin.strftime("%Y%m%d%H%M")    
+    strTmBegin = tmBegin.strftime("%Y%m%d%H%M%S")    
     packageName = packagePath + "/" + recordType + "_" + serialNo + "_" + strTmBegin + ".tar"
     
     return packageName
 
 def run(conf, recordType):
-    print("Process ", recordType, "record thread begin...")
+    print("Process " + recordType, "record thread begin...")
 
     # 获取详单路径以及压缩包保存路径
     recordPaths = conf.get(recordType, "RECORD_PATH")
     packagePath = conf.get(recordType, "PACKAGE_PATH")
+    bakPath = conf.get(recordType, "BAK_PATH");
+    
+    print("RECORD_PATH: " + recordPaths)
+    print("PACKAGE_PATH: " + packagePath)
+    print("BAK_PATH: " + bakPath)
 
-    print("RECORD_PATH: ", recordPaths)
-    print("PACKAGE_PATH: ", packagePath)
+    if not os.path.exists(bakPath):
+        print("The package path is not exist")
+        return
 
     if not os.path.exists(packagePath):
-        print("The package path is not exist!\n")
+        print("The bak path is not exist!")
         return
+
+    packageTmpPath = os.path.join(packagePath, 'tmp_dir')
+    if not os.path.exists(packageTmpPath):
+        print("The path '" + packageTmpPath + "' is not exist!")
+        return
+
+    strTm = datetime.datetime.now().strftime("%Y%m%d")
+    bakPath = os.path.join(bakPath, strTm)
+    if not os.path.exists(bakPath):
+        os.mkdir(bakPath)
 
     # 支持详单输入路径存在多个目录的情况
     recordPathList = recordPaths.split(';')
@@ -69,74 +100,107 @@ def run(conf, recordType):
     maxSerialNo, maxTarFileSize, timeWait = read_common_options(conf)
     currPath = os.getcwd()
 
-    nCount = 0
-    nTarFileSize = 0
+    nCount = 0          # 包个数
+    nFileCount = 0      # 应该打进包的原文件个数
+    nTarFileSize = 0    # 包中原文件总大小
+    isDirEmpty = True
+
+    tmBegin = datetime.datetime.now()
+    packageName = get_package_name(packageTmpPath, recordType, nCount, tmBegin)
+    tar = tarfile.open(packageName, 'w:gz')
     for recordPath in recordPathList:
         if not os.path.exists(recordPath):
             print("The record path is not exist!\n")
             return
 
         recordPath = os.path.join(currPath, recordPath)
+        packageTmpPath = os.path.join(currPath, packageTmpPath)
         packagePath = os.path.join(currPath, packagePath)
+        bakPath = os.path.join(currPath, bakPath)
         
-        isDirEmpty = True
         # 遍历目录获取文件列表
         fileList = os.listdir(recordPath)
-        startTime = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-        lastStartTime = conf.get(recordType, "LAST_START_TIME")
-        tmLastStart = datetime.datetime.strptime(lastStartTime, "%Y%m%d%H%M%S")
 
         if fileList:
-            tmBegin = datetime.datetime.now()
-            packageName = get_package_name(packagePath, recordType, nCount, tmBegin)
-            tar = tarfile.open(packageName, 'w:gz')
-
             for file in fileList:
                 fileName = os.path.join(recordPath, file)
 
                 if os.path.isfile(fileName):
-                    if (os.path.getmtime(fileName) -  tmLastStart).seconds > 0:
-                        if nCount > maxSerialNo:
-                            nCount %= maxSerialNo + 1
+                    if nCount > maxSerialNo:
+                        nCount %= maxSerialNo + 1
 
-                        # 单个文件大于MAX_TARFILE_SIZE，过滤掉，不参与压缩
-                        if os.path.getsize(fileName) > maxTarFileSize:
-                            continue
+                    # 单个文件大于MAX_TARFILE_SIZE，过滤掉，不参与压缩
+                    if os.path.getsize(fileName) > maxTarFileSize:
+                        print("Exception: Filter " + fileName + ", file size = ", os.path.getsize(fileName), " greater than MAX_TAR_FILE_SIZE.")
+                        continue
 
-                        # 放在单个大于MAX_TARFILE_SIZE情况之后，可以解决以下情况：
-                        # 当目录下所有文件都大于MAX_TARFILE_SIZE时，出空包的情况
-                        isDirEmpty = False    
+                    # 放在单个大于MAX_TARFILE_SIZE情况之后，可以解决以下情况：
+                    # 当目录下所有文件都大于MAX_TARFILE_SIZE时，出空包的情况
+                    isDirEmpty = False    
+                    
+                    tmTmp = datetime.datetime.now() 
+                    nTarFileSize += os.path.getsize(fileName)
+                
+                   # 压缩包源文件总量大于最大值或者打包周期已到
+                    if nTarFileSize > maxTarFileSize or (tmTmp-tmBegin).seconds >= timeWait:
+                        tar.close()
                         
-                        tmTmp = datetime.datetime.now() 
-                        nTarFileSize += os.path.getsize(fileName)
-                    
-                    # 压缩包源文件总量大于最大值或者打包周期已到
-                        if nTarFileSize > maxTarFileSize or (tmTmp-tmBegin).seconds >= timeWait:
-                            tar.close()
-                            
-                            nCount += 1
-                            nTarFileSize = os.path.getsize(fileName)
-                            # 压缩包源文件总量大于最大值但是打包周期未结束，则等待
-                            if timeWait > (tmTmp-tmBegin).seconds:
-                                time.sleep(timeWait - (tmTmp-tmBegin).seconds)
-                            
-                            tmBegin = datetime.datetime.now()
-                            packageName = get_package_name(packagePath, recordType, nCount, tmBegin)
-                            tar = tarfile.open(packageName, 'w:gz') 
-                        tar.add(fileName, arcname=file)
-                        os.remove(fileName)
-                    
-            if not tar.closed:
-                tar.close()
-            # 目录中没有文件的情况
-            if isDirEmpty:     
-                os.remove(packageName)
+                        nTarFileSize -= os.path.getsize(fileName)
+                        nRealCount, nTotalTarFileSize, fileNameList = stat(packageName)
+                        if nFileCount != nRealCount or nTarFileSize != nTotalTarFileSize:
+                            print("Error: file name is " + packageName, ", Total number of original files =", 
+                            nFileCount, ", The total number of files in the tar file =", nRealCount, 
+                            ", Total size of original files =", nTarFileSize, ", Total size of files in the tar file = ",
+                            nTotalTarFileSize, "Files: ",  fileNameList) 
+                        else:
+                            print("Success: file name is ",  packageName, ", Total number of original files =",
+                            nFileCount, ", The total number of files in the tar file =", nRealCount,
+                            ", Total size of original files =", nTarFileSize, ", Total size of files in the tar file = ",
+                            nTotalTarFileSize, ", Files: ",  fileNameList)
+ 
+                        shutil.move(packageName, packagePath)
 
-    conf.set(recordType, "LAST_START_TIME", startTime)
-    with open(CONFIG_FILE, "w+") as f:
-        conf.write(f)
+                        nCount += 1
+                        nFileCount = 0
+                        nTarFileSize = os.path.getsize(fileName)
+                        
+                        # 压缩包源文件总量大于最大值但是打包周期未结束，则等待
+                        if timeWait - (tmTmp-tmBegin).seconds > 0:
+                            time.sleep(timeWait - (tmTmp-tmBegin).seconds)
+                        
+                        tmBegin = datetime.datetime.now()
+                        packageName = get_package_name(packageTmpPath, recordType, nCount, tmBegin)
+                        tar = tarfile.open(packageName, 'w:gz') 
 
-    print("Process ", recordType, "record thread end...\n")        
+                    print('Packing, original file=' + fileName, ', tar file=' + packageName)
+                    nFileCount += 1
+                    tar.add(fileName, arcname=file)
+                    # os.remove(fileName)
+                    shutil.move(fileName, bakPath)
+                    print("move " + fileName + " from " +  recordPath + " to " + bakPath + "....")
+                    
+    if not tar.closed:
+        tar.close()
+        
+        nRealCount, nTotalTarFileSize, fileNameList = stat(packageName)
+        if nFileCount != nRealCount:
+            print("Error: file name is " + packageName, ", Total number of original files =", 
+            nFileCount, ", The total number of files in the tar file =", nRealCount, 
+            ", Total size of original files =", nTarFileSize, ", Total size of files in the tar file = ",
+            nTotalTarFileSize, ", Files: ",  fileNameList) 
+        else:
+            print("Success: file name is ",  packageName, ", Total number of original files =",
+            nFileCount, "The total number of files in the tar file =", nRealCount, 
+            "Total size of original files =", nTarFileSize, ", Total size of files in the tar file = ",
+            nTotalTarFileSize,", Files: ",  fileNameList)
+        
+    # 目录中没有文件的情况
+    if isDirEmpty:
+        os.remove(packageName)
+    else:
+        shutil.move(packageName, packagePath)
+
+    print("Process " + recordType, " record thread end...\n")        
 
 def main():
     conf = init_config(CONFIG_FILE)
@@ -161,3 +225,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
