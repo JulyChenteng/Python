@@ -1,8 +1,12 @@
+import codecs
+import chardet
+
 poem = '''\
     Programming is fun When the work is
 done if you wanna make your work also
 fun:
     use Python!
+    你好！
 '''
 
 '''
@@ -30,15 +34,25 @@ f.close() #close the file
 
 #with语句
 #写入文件
+'''
 with open('poem.txt', 'w') as f:
     f.write(poem)
+'''
 
 #读取文件
-with open('poem.txt') as f:
+'''
+with open('./file/TIS', 'r', encoding='UTF-8') as f:
     while True:
         line = f.readline()
         if len(line) == 0:
             break
 
         print(line, end = "")
-        
+ '''       
+ 
+with codecs.open("./file/windows","rb") as f:
+    data = f.read() 
+    print(type(data)) 
+    encodeInfo = chardet.detect(data) 
+    print(encodeInfo["encoding"])
+    print(data.decode(encodeInfo["encoding"]))
