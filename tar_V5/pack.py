@@ -69,7 +69,7 @@ def run(conf, recordType):
     # 获取详单路径以及压缩包保存路径
     recordPaths = conf.get(recordType, "RECORD_PATH")
     packagePath = conf.get(recordType, "PACKAGE_PATH")
-    bakPath = conf.get(recordType, "BAK_PATH");
+    bakPath = conf.get(recordType, "BAK_PATH")
     
     print("RECORD_PATH: " + recordPaths)
     print("PACKAGE_PATH: " + packagePath)

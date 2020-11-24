@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<config>
+    <!--  日志保存路径  -->
+    <logpath>E:\PythonLog</logpath>
+    <!-- 每个脚本对应的日志文件大小，单位MB -->
+    <logsize>8</logsize>
+    <!-- 每个脚本保存的日志文件个数 -->
+    <lognum>3</lognum>
+    <!-- FATAL = 50 ERROR = 40 WARNING = 30 INFO = 20 DEBUG = 10 -->
+    <loglevel>10</loglevel>  
+    
+    <biz_ids>107,105</biz_ids>
+    <db>
+        <user>bd</user>
+        <pwd>bd</pwd>
+        <dns>(DESCRIPTION = (ADDRESS = (PROTOCOL = TCP)(HOST = 10.15.49.45)(PORT = 1521)) (CONNECT_DATA = (SERVER = DEDICATED) (SID = jxcmc_v8)))</dns>
+    </db>
+</config>
